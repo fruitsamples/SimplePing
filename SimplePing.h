@@ -1,202 +1,206 @@
 /*
-	File:		SimplePing.h
-	
-	Description:	This file is a header for a  simple API to ping a remote host.
-	
-	Author:		Chad Jones 
+    File:       SimplePing.h
 
-	Copyright: 	© Copyright 2003 Apple Computer, Inc. All rights reserved.
-	
-	Disclaimer:	IMPORTANT:  This Apple software is supplied to you by Apple Computer, Inc.
-				("Apple") in consideration of your agreement to the following terms, and your
-				use, installation, modification or redistribution of this Apple software
-				constitutes acceptance of these terms.  If you do not agree with these terms,
-				please do not use, install, modify or redistribute this Apple software.
+    Contains:   Implements ping.
 
-				In consideration of your agreement to abide by the following terms, and subject
-				to these terms, Apple grants you a personal, non-exclusive license, under Apple’s
-				copyrights in this original Apple software (the "Apple Software"), to use,
-				reproduce, modify and redistribute the Apple Software, with or without
-				modifications, in source and/or binary forms; provided that if you redistribute
-				the Apple Software in its entirety and without modifications, you must retain
-				this notice and the following text and disclaimers in all such redistributions of
-				the Apple Software.  Neither the name, trademarks, service marks or logos of
-				Apple Computer, Inc. may be used to endorse or promote products derived from the
-				Apple Software without specific prior written permission from Apple.  Except as
-				expressly stated in this notice, no other rights or licenses, express or implied,
-				are granted by Apple herein, including but not limited to any patent rights that
-				may be infringed by your derivative works or by other works in which the Apple
-				Software may be incorporated.
+    Written by: DTS
 
-				The Apple Software is provided by Apple on an "AS IS" basis.  APPLE MAKES NO
-				WARRANTIES, EXPRESS OR IMPLIED, INCLUDING WITHOUT LIMITATION THE IMPLIED
-				WARRANTIES OF NON-INFRINGEMENT, MERCHANTABILITY AND FITNESS FOR A PARTICULAR
-				PURPOSE, REGARDING THE APPLE SOFTWARE OR ITS USE AND OPERATION ALONE OR IN
-				COMBINATION WITH YOUR PRODUCTS.
+    Copyright:  Copyright (c) 2010 Apple Inc. All Rights Reserved.
 
-				IN NO EVENT SHALL APPLE BE LIABLE FOR ANY SPECIAL, INDIRECT, INCIDENTAL OR
-				CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE
-				GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
-				ARISING IN ANY WAY OUT OF THE USE, REPRODUCTION, MODIFICATION AND/OR DISTRIBUTION
-				OF THE APPLE SOFTWARE, HOWEVER CAUSED AND WHETHER UNDER THEORY OF CONTRACT, TORT
-				(INCLUDING NEGLIGENCE), STRICT LIABILITY OR OTHERWISE, EVEN IF APPLE HAS BEEN
-				ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-				
-	Change History (most recent first): 
-        10/3/03		Chad Jones	Added comment indicating sample requires build tools 
-                                        ProjectBuilder 2.1 or later
+    Disclaimer: IMPORTANT: This Apple software is supplied to you by Apple Inc.
+                ("Apple") in consideration of your agreement to the following
+                terms, and your use, installation, modification or
+                redistribution of this Apple software constitutes acceptance of
+                these terms.  If you do not agree with these terms, please do
+                not use, install, modify or redistribute this Apple software.
+
+                In consideration of your agreement to abide by the following
+                terms, and subject to these terms, Apple grants you a personal,
+                non-exclusive license, under Apple's copyrights in this
+                original Apple software (the "Apple Software"), to use,
+                reproduce, modify and redistribute the Apple Software, with or
+                without modifications, in source and/or binary forms; provided
+                that if you redistribute the Apple Software in its entirety and
+                without modifications, you must retain this notice and the
+                following text and disclaimers in all such redistributions of
+                the Apple Software. Neither the name, trademarks, service marks
+                or logos of Apple Inc. may be used to endorse or promote
+                products derived from the Apple Software without specific prior
+                written permission from Apple.  Except as expressly stated in
+                this notice, no other rights or licenses, express or implied,
+                are granted by Apple herein, including but not limited to any
+                patent rights that may be infringed by your derivative works or
+                by other works in which the Apple Software may be incorporated.
+
+                The Apple Software is provided by Apple on an "AS IS" basis. 
+                APPLE MAKES NO WARRANTIES, EXPRESS OR IMPLIED, INCLUDING
+                WITHOUT LIMITATION THE IMPLIED WARRANTIES OF NON-INFRINGEMENT,
+                MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE, REGARDING
+                THE APPLE SOFTWARE OR ITS USE AND OPERATION ALONE OR IN
+                COMBINATION WITH YOUR PRODUCTS.
+
+                IN NO EVENT SHALL APPLE BE LIABLE FOR ANY SPECIAL, INDIRECT,
+                INCIDENTAL OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED
+                TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+                DATA, OR PROFITS; OR BUSINESS INTERRUPTION) ARISING IN ANY WAY
+                OUT OF THE USE, REPRODUCTION, MODIFICATION AND/OR DISTRIBUTION
+                OF THE APPLE SOFTWARE, HOWEVER CAUSED AND WHETHER UNDER THEORY
+                OF CONTRACT, TORT (INCLUDING NEGLIGENCE), STRICT LIABILITY OR
+                OTHERWISE, EVEN IF APPLE HAS BEEN ADVISED OF THE POSSIBILITY OF
+                SUCH DAMAGE.
+
 */
 
-//Note this sample requires Mac OS X 10.2.x or later and 
-//ProjectBuilder version 2.1 or later.
+#import <Foundation/Foundation.h>
 
-#if !defined(__DTSSampleCode_SimplePing__)
-#define __DTSSampleCode_SimplePing__ 1
+#if TARGET_OS_EMBEDDED || TARGET_IPHONE_SIMULATOR
+    #import <CFNetwork/CFNetwork.h>
+#else
+    #import <CoreServices/CoreServices.h>
+#endif
 
-#include <sys/time.h>
-#include <netinet/in.h>
-#include <netinet/in_systm.h>
-#include <netinet/ip.h>
-#include <netinet/ip_icmp.h>
+#include <AssertMacros.h>
 
-struct PingICMPPacket 
+#pragma mark * SimplePing
+
+// The SimplePing class is a very simple class that lets you send and receive pings.
+
+@protocol SimplePingDelegate;
+
+@interface SimplePing : NSObject
 {
-    struct icmp 	icmpHeader; //required icmp header
-    struct timeval 	packetTimeStamp; //our optional data will be the packet send time.
+    NSString *              _hostName;
+    NSData *                _hostAddress;
+    CFHostRef               _host;
+    CFSocketRef             _socket;
+
+    id<SimplePingDelegate>  _delegate;
+    uint16_t                _identifier;                            // host byte order
+    uint16_t                _nextSequenceNumber;                    // host byte order
+}
+
++ (SimplePing *)simplePingWithHostName:(NSString *)hostName;        // chooses first IPv4 address
++ (SimplePing *)simplePingWithHostAddress:(NSData *)hostAddress;    // contains (struct sockaddr)
+
+@property (nonatomic, assign, readwrite) id<SimplePingDelegate> delegate;
+
+@property (nonatomic, copy,   readonly)  NSString *             hostName;
+@property (nonatomic, copy,   readonly)  NSData *               hostAddress;
+@property (nonatomic, assign, readonly)  uint16_t               identifier;
+@property (nonatomic, assign, readonly)  uint16_t               nextSequenceNumber;
+
+- (void)start;
+    // Starts the pinger object pinging.  You should call this after 
+    // you've setup the delegate and any ping parameters.
+
+- (void)sendPingWithData:(NSData *)data;
+    // Sends an actual ping.  Pass nil for data to use a standard 56 byte payload (resulting in a 
+    // standard 64 byte ping).  Otherwise pass a non-nil value and it will be appended to the 
+    // ICMP header.
+    //
+    // Do not try to send a ping before you receive the -simplePing:didStartWithAddress: delegate 
+    // callback.
+
+- (void)stop;
+    // Stops the pinger object.  You should call this when you're done 
+    // pinging.
+
++ (const struct ICMPHeader *)icmpInPacket:(NSData *)packet;
+    // Given a valid IP packet contains an ICMP , returns the address of the ICMP header that 
+    // follows the IP header.  This doesn't do any significant validation of the packet.
+
+@end
+
+@protocol SimplePingDelegate <NSObject>
+
+@optional
+
+- (void)simplePing:(SimplePing *)pinger didStartWithAddress:(NSData *)address;
+    // Called after the SimplePing has successfully started up.  After this callback, you 
+    // can start sending pings via -sendPingWithData:
+    
+- (void)simplePing:(SimplePing *)pinger didFailWithError:(NSError *)error;
+    // If this is called, the SimplePing object has failed.  By the time this callback is 
+    // called, the object has stopped (that is, you don't need to call -stop yourself).
+
+// IMPORTANT: On the send side the packet does not include an IP header. 
+// On the receive side, it does.  In that case, use +[SimplePing icmpInPacket:] 
+// to find the ICMP header within the packet.
+
+- (void)simplePing:(SimplePing *)pinger didSendPacket:(NSData *)packet;
+    // Called whenever the SimplePing object has successfully sent a ping packet. 
+    
+- (void)simplePing:(SimplePing *)pinger didFailToSendPacket:(NSData *)packet error:(NSError *)error;
+    // Called whenever the SimplePing object tries and fails to send a ping packet.
+
+- (void)simplePing:(SimplePing *)pinger didReceivePingResponsePacket:(NSData *)packet;
+    // Called whenever the SimplePing object receives an ICMP packet that looks like 
+    // a response to one of our pings (that is, has a valid ICMP checksum, has 
+    // an identifier that matches our identifier, and has a sequence number in 
+    // the range of sequence numbers that we've sent out).
+
+- (void)simplePing:(SimplePing *)pinger didReceiveUnexpectedPacket:(NSData *)packet;
+    // Called whenever the SimplePing object receives an ICMP packet that does not 
+    // look like a response to one of our pings.
+
+@end
+
+#pragma mark * IP and ICMP On-The-Wire Format
+
+// The following declarations specify the structure of ping packets on the wire.
+
+// IP header structure:
+
+struct IPHeader {
+    uint8_t     versionAndHeaderLength;
+    uint8_t     differentiatedServices;
+    uint16_t    totalLength;
+    uint16_t    identification;
+    uint16_t    flagsAndFragmentOffset;
+    uint8_t     timeToLive;
+    uint8_t     protocol;
+    uint16_t    headerChecksum;
+    uint8_t     sourceAddress[4];
+    uint8_t     destinationAddress[4];
+    // options...
+    // data...
+};
+typedef struct IPHeader IPHeader;
+
+check_compile_time(sizeof(IPHeader) == 20);
+check_compile_time(offsetof(IPHeader, versionAndHeaderLength) == 0);
+check_compile_time(offsetof(IPHeader, differentiatedServices) == 1);
+check_compile_time(offsetof(IPHeader, totalLength) == 2);
+check_compile_time(offsetof(IPHeader, identification) == 4);
+check_compile_time(offsetof(IPHeader, flagsAndFragmentOffset) == 6);
+check_compile_time(offsetof(IPHeader, timeToLive) == 8);
+check_compile_time(offsetof(IPHeader, protocol) == 9);
+check_compile_time(offsetof(IPHeader, headerChecksum) == 10);
+check_compile_time(offsetof(IPHeader, sourceAddress) == 12);
+check_compile_time(offsetof(IPHeader, destinationAddress) == 16);
+
+// ICMP type and code combinations:
+
+enum {
+    kICMPTypeEchoReply   = 0,           // code is always 0
+    kICMPTypeEchoRequest = 8            // code is always 0
 };
 
-/*****************************************************
- * LookupHostAddress
- *****************************************************
- * Purpose:  This function provides a mechanism to get a host address
- * as a internet address structure given only a string describing the
- * remote host.  The string passed will be either a host name
- * (e.g. www.apple.com) or an IP address (e.g. 17.203.23.111)
- *
- * Parameters:
- * 	HostToPing		A constant C-string.  On calling
- * LookupHostAddress this variable holds a CString describing the
- * remote host.  The string can either be a host name (e.g. www.google.com)
- * or an IP address (e.g. 17.203.23.112)
- *
- * 	HostAddress	A pointer to a pre-allocated array of sockaddr_in structure.
- * On calling LookupHostAddress this variable must be a pointer to a
- * pre-allocated sockaddr_in structure.  On successful return from LookupHostAddress
- * this variable will hold the host address expressed as an sockaddr_in structure.
- * On failed return the value of this variable is undefined
- *
- * 	*Function Result* 	A UNIX error integer return value as described in:
- *				/usr/include/sys/errno.h on a BSD system.
- * 				Note: This value will be zero on success.
- *****************************************************/
-int LookupHostAddress(const char* HostToPing, struct sockaddr_in* HostAddress);
+// ICMP header structure:
 
-/*****************************************************
- * CreateSocketForCommunicationWithHost
- *****************************************************
- * Purpose:  This function sets up a socket for communicating
- * with the given remote host and also sets the parameters of 
- * that socket to our required specifications (timeout of 1 second
- * and larger receive buffer).
- *
- * Parameters:
- * 	HostAddress		A sockaddr_in structure.  On calling 
- * CreateSocketForCommunicationWithHost this variable has an address
- * of the host the socket will be established with expressed in sockaddr_in format.
- *
- * 	SocketToReturn	A pointer to a pre-allocated integer.  On successful 
- * return from CreateSocketForCommunicationWithHost this variable will hold
- * a socket descriptor used to communicate with the socket in future calls.  On
- * failed result this variable will be undefined.  Note on successful result its
- * the caller's responsibility to close the socket.
- *
- * 	*Function Result* 	A UNIX error integer return value as described in:
- *				/usr/include/sys/errno.h on a BSD system.
- * 				Note: This value will be zero on success.
- *****************************************************/
-int CreateSocketForCommunicationWithHost(const struct sockaddr_in HostAddress, int* SocketToReturn);
+struct ICMPHeader {
+    uint8_t     type;
+    uint8_t     code;
+    uint16_t    checksum;
+    uint16_t    identifier;
+    uint16_t    sequenceNumber;
+    // data...
+};
+typedef struct ICMPHeader ICMPHeader;
 
-/*****************************************************
- * CreateAndSendICMPPacket
- *****************************************************
- * Purpose:  This function creates an ICMP packet with the necessary information
- * inside of it to make it a ping packet.  This function also sends that ping packet to
- * the remote host.
- *
- * Parameters:
- * 	HostAddress		A sockaddr_in structure.  On calling 
- * CreateAndSendICMPPacket this variable has an address
- * of the host where the ping will be sent.
- *
- * 	SequenceNumber	A integer.  when calling CreateAndSendICMPPacket this variable 
- * will hold the sequence number of the ping packet being sent.  This information is
- * then put in the ping packet sent to the host so when they reply we know which
- * send the reply is associated with.
- *
- *	SocketConnectionToHost A socket descriptor expressed as an integer.  On calling
- * CreateAndSendICMPPacket this variable will be a valid socket which is already setup
- * for communicating with the remote host.  
- *
- * 	*Function Result* 	A UNIX error integer return value as described in:
- *				/usr/include/sys/errno.h on a BSD system.
- * 				Note: This value will be zero on success.
- *****************************************************/
-int CreateAndSendICMPPacket(struct sockaddr_in HostAddress, int SequenceNumber, int SocketConnectionToHost);
-
-/*****************************************************
- * WaitAndPrintICMPs
- *****************************************************
- * Purpose:  This function creates an ICMP packet with the necessary information
- * inside of it to make it a ping packet.  This function also sends that ping packet to
- * the remote host.
- *
- * Parameters:
- *	SocketConnectionToHost A socket descriptor expressed as an integer.  On calling
- * WaitAndPrintICMPs this variable will be a valid socket which is already setup
- * for communicating with the remote host.  This will be used in getting the reply
- * packets from the host.
- *
- * 	TimeoutInSeconds	A timeout expressed as an integer.  On calling 
- * WaitAndPrintICMPs this variable will have the number of seconds to wait for
- * ICMP replies.  Note even if a valid ICMP reply comes that matches what we expect
- * we will still wait for additional ICMP packets until the timeout has occurred.
- *
- * 	GotResponse		A pre-allocated integer.  when calling WaitAndPrintICMPs
- * this variable will be a pre-allocated integer.  On successful return from WaitAndPrintICMPs this
- * variable will hold a value of 1 if a ICMP packet response to our ping was received.
- * And a zero otherwise.  On failed return the value of this variable will be undefined.
- *
- * 	*Function Result* 	A UNIX error integer return value as described in:
- *				/usr/include/sys/errno.h on a BSD system.
- * 				Note: This value will be zero on success.
- *****************************************************/
-int WaitAndPrintICMPs(int socketConnectionToHost, int TimeoutInSeconds, int ReturnimmediatelyAfterReply, int* GotResponse);
-
-/*****************************************************
- * SimplePing
- *****************************************************
- * Purpose:  This function uses the above functions to ping a given remote host with
- * a given number of packets and with a given timeout to wait for responses on each packet.
- *
- * Parameters:
- *	HostToPing 		A C-String describing the remote host.  On calling
- * SimplePing this variable will hold a description of the host as a C-String.  The string
- * can either be a hostname (e.g. www.google.com) or an IP address (e.g. 17.203.23.111)
- *
- * 	NumberOfPacketsToSend	An integer.  On calling SimplePing this variable holds
- * the number of ping packets to send to the host before stopping.
- *
- * 	PingTimeoutInSeconds	An integer.  On calling Simple Ping this variable holds
- * the amount of time SimplePing will wait for responses from the ping before going onto the next packet.
- * Note even if a ping reply is received we will continue waiting until the timeout has occurred.
- *
- * 	*Function Result* 	A UNIX error integer return value as described in:
- *				/usr/include/sys/errno.h on a BSD system.
- * 				Note: This value will be zero on success.
- *****************************************************/
-int SimplePing(const char* HostToPing, const int NumberOfPacketsToSend, const int PingTimeoutInSeconds, const int ReturnimmediatelyAfterReply);
-
-//Checksum function stolen from original ping ;-)
-int in_cksum(u_short *addr, int len);
-
-#endif
+check_compile_time(sizeof(ICMPHeader) == 8);
+check_compile_time(offsetof(ICMPHeader, type) == 0);
+check_compile_time(offsetof(ICMPHeader, code) == 1);
+check_compile_time(offsetof(ICMPHeader, checksum) == 2);
+check_compile_time(offsetof(ICMPHeader, identifier) == 4);
+check_compile_time(offsetof(ICMPHeader, sequenceNumber) == 6);
